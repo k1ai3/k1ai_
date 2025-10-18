@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>K1 Ai Chatbot</title>
+    <!-- Load Tailwind CSS for modern styling and responsiveness -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles for a dark, mobile-friendly interface and unique scrollbar */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0d1117; /* Dark background */
+        }
+        /* Custom scrollbar for chat history */
+        #chat-history::-webkit-scrollbar {
+            width: 8px;
+        }
+        #chat-history::-webkit-scrollbar-thumb {
+            background-color: #00bcd4; /* Cyan/Teal for contrast */
+            border-radius: 10px;
+        }
+        #chat-history::-webkit-scrollbar-track {
+            background: #161b22;
+        }
+        /* Styling for User and AI message bubbles */
+        .user-message {
+            background-color: #2c5282; /* Deep blue for user */
+            margin-left: auto;
+        }
+        .ai-message {
+            background-color: #1f2937; /* Darker gray for AI */
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased">
+
+    <!-- HEADER: K1 Ai Branding and Credits -->
+    <header class="bg-gray-800 p-4 shadow-lg sticky top-0 z-10">
+        <h1 class="text-3xl font-extrabold text-teal-400 text-center">K1 Ai</h1>
+        <!-- YOUR SPECIFIC DESCRIPTION -->
+        <p class="text-sm text-gray-400 text-center mt-1">This Is Ai And All Credits Goes To FFK1 And Priyanshu</p>
+    </header>
+
+    <!-- MAIN CHAT AREA -->
+    <main class="flex-grow flex flex-col p-4 overflow-hidden">
+        <!-- Chat History Container -->
+        <div id="chat-history" class="flex-grow overflow-y-auto space-y-4 p-2 rounded-lg bg-[#161b22]">
+            <!-- Initial welcome message (The start of the conversation) -->
+            <div class="ai-message p-3 max-w-4/5 md:max-w-3/5 rounded-xl rounded-tl-none shadow-md text-gray-200">
+                <span class="font-bold text-teal-300">AI:</span> Hello! I am K1 Ai, a friendly and helpful assistant ready to chat. How can I help you today?
+            </div>
+            <!-- Messages will be injected here by JavaScript -->
+        </div>
+
+        <!-- Loading Indicator (Hidden by default) -->
+        <div id="loading-indicator" class="mt-4 p-3 bg-gray-700 text-teal-400 text-center rounded-lg shadow-xl hidden">
+            <svg class="animate-spin h-5 w-5 mr-3 inline-block" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            K1 Ai is thinking...
+        </div>
+    </main>
+
+    <!-- INPUT FORM -->
+    <div class="p-4 bg-gray-800 border-t border-gray-700 shadow-2xl">
+        <form id="chat-form" class="flex space-x-3">
+            <input
+                type="text"
+                id="user-input"
+                placeholder="Ask K1 Ai a question..."
+                class="flex-grow p-3 border border-gray-600 bg-gray-900 text-white rounded-xl focus:ring-teal-500 focus:border-teal-500 transition duration-150 shadow-inner"
+                required
+            >
+            <button
+                type="submit"
+                id="send-button"
+                class="px-6 py-3 bg-teal-600 text-white font-semibold rounded-xl hover:bg-teal-700 transition duration-200 ease-in-out shadow-lg transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+                Send
+            </button>
+        </form>
+    </div>
+
+    <!-- JAVASCRIPT LOGIC (The Brains of the AI) -->
+    <script>
+        const chatHistory = document.getElementById('chat-history');
+        const userInput = document.getElementById('user-input');
+        const chatForm = document.getElementById('chat-form');
+        const sendButton = document.getElementById('send-button');
+        const loadingIndicator = document.getElementById('loading-indicator');
+
+        // --- Core Gemini API Configuration ---
+        const API_URL_BASE = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+        
+        // YOUR API KEY IS ALREADY INSERTED HERE.
+        const apiKey = "AIzaSyDo53gvdt-DiedJlCEG7WM0-_T2gMixYxE"; 
+
+        // --- Helper Function to Display Messages ---
+        function appendMessage(text, role, sources = []) {
+            const isUser = role === 'user';
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `p-3 max-w-4/5 md:max-w-3/5 rounded-xl shadow-md text-white ${isUser ? 'user-message rounded-tr-none' : 'ai-message rounded-tl-none'}`;
+            messageDiv.innerHTML = `<span class="font-bold ${isUser ? 'text-teal-200' : 'text-teal-300'}">${isUser ? 'You' : 'AI'}:</span> ${text.replace(/\n/g, '<br>')}`;
+
+            // Add Grounding Sources if available
+            if (sources.length > 0) {
+                const sourcesContainer = document.createElement('div');
+                sourcesContainer.className = 'mt-2 pt-2 border-t border-gray-600 text-xs text-gray-400';
+                let sourcesHtml = '<strong>Sources:</strong><ul class="list-disc ml-4 mt-1 space-y-0.5">';
+                sources.forEach(source => {
+                    sourcesHtml += `<li><a href="${source.uri}" target="_blank" class="text-teal-400 hover:text-teal-300 transition duration-150 block overflow-hidden whitespace-nowrap overflow-ellipsis" style="max-width: 95%;">${source.title || source.uri}</a></li>`;
+                });
+                sourcesHtml += '</ul>';
+                sourcesContainer.innerHTML = sourcesHtml;
+                messageDiv.appendChild(sourcesContainer);
+            }
+
+            chatHistory.appendChild(messageDiv);
+            // Auto-scroll to the bottom
+            chatHistory.scrollTop = chatHistory.scrollHeight;
+        }
+
+        // --- Fetch with Retry for API calls (Robustness) ---
+        async function fetchWithRetry(url, options, maxRetries = 3) {
+            if (!apiKey) {
+                throw new Error("API Key is missing or invalid.");
+            }
+            
+            for (let i = 0; i < maxRetries; i++) {
+                try {
+                    const response = await fetch(url, options);
+                    if (!response.ok) {
+                        const errorBody = await response.text();
+                        if (response.status === 403) {
+                            throw new Error("403 Permission Denied: The API Key is likely invalid or missing the necessary permissions.");
+                        }
+                        throw new Error(`HTTP error! Status: ${response.status}. Body: ${errorBody}`);
+                    }
+                    return response;
+                } catch (error) {
+                    if (i === maxRetries - 1) throw error;
+                    console.log(`Fetch failed (attempt ${i + 1}/${maxRetries}), retrying...`, error);
+                    const delay = Math.pow(2, i) * 1000 + Math.random() * 500;
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
+            }
+        }
+
+        // --- Main Function to Get AI Response ---
+        async function generateResponse(prompt) {
+            // FIX: Updated System Instruction to force a factual, direct answer, minimizing conversational loops.
+            const systemPrompt = "You are K1 Ai, a friendly and polite AI assistant. When asked a factual question, **you MUST perform a Google search and provide a direct, concise answer immediately.** Do not ask for clarification unless the query is completely ambiguous. Acknowledge the user's greeting or question directly and follow up with the answer.";
+            const url = `${API_URL_BASE}?key=${apiKey}`;
+
+            const payload = {
+                contents: [{ parts: [{ text: prompt }] }],
+                tools: [{ "google_search": {} }], // Enable Google Search grounding
+                systemInstruction: {
+                    parts: [{ text: systemPrompt }]
+                },
+            };
+
+            const options = {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            };
+
+            try {
+                const response = await fetchWithRetry(url, options);
+                const result = await response.json();
+                const candidate = result.candidates?.[0];
+
+                if (candidate && candidate.content?.parts?.[0]?.text) {
+                    const text = candidate.content.parts[0].text;
+                    let sources = [];
+
+                    // Extract grounding sources for fact-checking
+                    const groundingMetadata = candidate.groundingMetadata;
+                    if (groundingMetadata && groundingMetadata.groundingAttributions) {
+                        sources = groundingMetadata.groundingAttributions
+                            .map(attribution => ({
+                                uri: attribution.web?.uri,
+                                title: attribution.web?.title,
+                            }))
+                            .filter(source => source.uri && source.title);
+                    }
+
+                    return { text, sources };
+                } else {
+                    // Handle safety blocks or other non-text errors
+                    const safetyRating = result.candidates?.[0]?.safetyRatings?.[0];
+                    if (safetyRating) {
+                         return { text: `I cannot answer this question because it was flagged under a safety filter.`, sources: [] };
+                    }
+                    return { text: "I apologize, I received an empty or malformed response from the service. Please try your question again.", sources: [] };
+                }
+            } catch (error) {
+                console.error("API Call Error:", error);
+                // Display the detailed error message in the chat
+                return { text: `🚨 AI System Error: ${error.message}`, sources: [] };
+            }
+        }
+
+        // --- Event Listener for Form Submission ---
+        chatForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const prompt = userInput.value.trim();
+            if (!prompt) return;
+
+            // 1. Display user message
+            appendMessage(prompt, 'user');
+            userInput.value = '';
+
+            // 2. Disable input and show loading
+            sendButton.disabled = true;
+            userInput.disabled = true;
+            loadingIndicator.classList.remove('hidden');
+
+            // 3. Get response from Gemini
+            const { text, sources } = await generateResponse(prompt);
+
+            // 4. Display AI response
+            appendMessage(text, 'ai', sources);
+
+            // 5. Re-enable input and hide loading
+            loadingIndicator.classList.add('hidden');
+            sendButton.disabled = false;
+            userInput.disabled = false;
+            userInput.focus();
+        });
+
+        // Focus on the input when the page loads
+        window.onload = () => {
+            userInput.focus();
+        };
+    </script>
+</body>
+</html>
+
